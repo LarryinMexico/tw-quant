@@ -1,0 +1,30 @@
+# === Python ===
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# === 環境與敏感資訊 ===
+.venv/
+.env
+
+# === 快取資料（太大，不進 git）===
+finmind_cache/
+twse_cache/
+
+# === 二進位模型檔 ===
+# 預設忽略全部 .pkl，再用 ! 例外開放特定檔案
+# 注意：! 例外規則必須寫在 *.pkl 之後才有效
+*.pkl
+!weights.pkl
+!predictions.pkl
+
+# === HTML 報告（每次執行重新生成）===
+*.html
+
+# === AI 輔助工具設定（非專案本體，不公開）===
+.agent/
+AGENTS.md
+
+# === 系統檔 ===
+.DS_Store

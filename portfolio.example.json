@@ -1,0 +1,10 @@
+{
+  "_comment": "複製此檔案為 portfolio.json，修改 cash 為你的初始資金（單位：元）",
+  "cash": 1000000,
+  "last_trade_date": null,
+  "positions": {},
+  "history": [],
+  "trade_log_history": [],
+  "cost_basis": {},
+  "force_rebalance": false
+}
