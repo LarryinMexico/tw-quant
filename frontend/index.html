@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>台股ML虛擬基金 Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0;
+             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+        body { background: #131722; color: #D1D4DC; padding: 16px;
+                font-size: 14px; min-height: 100vh; }
+
+        /* ── Layout ── */
+        .grid-main {
+            display: grid;
+            grid-template-columns: 3fr 1fr;
+            gap: 16px;
+            max-width: 1600px;
+            margin: 0 auto 16px;
+        }
+        .header-bar {
+            grid-column: 1 / -1;
+        }
+
+        /* ── Bottom section ── */
+        .grid-bottom {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        /* ── Tablet (≤1024px) ── */
+        @media (max-width: 1024px) {
+            .grid-main { grid-template-columns: 1fr; }
+            .grid-bottom { grid-template-columns: 1fr; }
+        }
+
+        /* ── Mobile (≤640px) ── */
+        @media (max-width: 640px) {
+            body { padding: 8px; font-size: 13px; }
+            .metric-val { font-size: 18px !important; }
+            .header-right { flex-direction: column; gap: 10px !important; }
+            .col-right:nth-child(3) { display: none; }   /* hide "Shares" on mobile */
+        }
+
+        /* ── Panel ── */
+        .panel {
+            background: #1E222D;
+            border-radius: 6px;
+            border: 1px solid #2A2E39;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .panel-header {
+            padding: 10px 16px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #8D94A6;
+            border-bottom: 1px solid #2A2E39;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #363C4E; border-radius: 3px; }
+
+        /* ── Top Bar ── */
+        .top-bar-content {
+            padding: 14px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+        .metric-group { display: flex; flex-direction: column; }
+        .metric-title { color: #8D94A6; font-size: 11px; margin-bottom: 3px;
+                          text-transform: uppercase; letter-spacing: 0.5px; }
+        .metric-val { font-size: 22px; font-weight: 700; }
+        .metric-sub { font-size: 13px; font-weight: 600; margin-left: 10px; }
+        .header-right { display:flex; gap:40px; text-align:right; }
+
+        /* ── Chart panels ── */
+        .chart-fill { flex: 1; min-height: 320px; }
+
+        /* ── Right sidebar ── */
+        .right-sidebar {
+            display: flex;
+            flex-direction: column;
+            max-height: 680px;
+        }
+
+        /* ── Donut ── */
+        .donut-wrapper {
+            padding: 12px 16px 4px;
+            border-bottom: 1px solid #2A2E39;
+            flex-shrink: 0;
+        }
+        .donut-container {
+            position: relative;
+            width: 185px;
+            height: 185px;
+            margin: 0 auto 4px;
+        }
+        .donut-label {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center; pointer-events: none;
+        }
+        .donut-val { font-size: 22px; font-weight: 700; color: #D1D4DC; }
+        .donut-sub { font-size: 10px; color: #8D94A6; text-transform: uppercase;
+                      margin-top: 2px; letter-spacing: 0.5px; }
+
+        /* ── Holdings Table ── */
+        .tbl-header {
+            display: flex;
+            padding: 7px 14px;
+            color: #8D94A6;
+            font-size: 10px;
+            border-bottom: 1px solid #2A2E39;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            flex-shrink: 0;
+        }
+        .table-row {
+            display: flex; padding: 9px 14px;
+            border-bottom: 1px solid #2A2E39;
+            font-size: 12px; align-items: center;
+            transition: background 0.15s;
+        }
+        .table-row:hover { background: rgba(255,255,255,0.03); cursor: default; }
+        .col-ticker { flex: 1.5; font-weight: 600; display: flex;
+                        flex-direction: column; gap: 1px; }
+        .stock-id   { font-size: 13px; }
+        .stock-name { font-size: 10px; color: #8D94A6; font-weight: 400; }
+        .col-right  { flex: 1; text-align: right; }
+        .holdings-scroll { flex: 1; overflow-y: auto; }
+
+        /* ── Bottom tables ── */
+        .history-table {
+            width: 100%; border-collapse: collapse; font-size: 12px;
+        }
+        .history-table th {
+            padding: 7px 14px; text-align: left;
+            background: #161d2b; color: #8D94A6;
+            font-size: 10px; text-transform: uppercase;
+            letter-spacing: 0.3px; border-bottom: 1px solid #2A2E39;
+        }
+        .history-table td {
+            padding: 8px 14px; border-bottom: 1px solid #2A2E39;
+        }
+        .history-table tr:last-child td { border-bottom: none; }
+        .history-table tr:hover td { background: rgba(255,255,255,0.02); }
+        .scroll-body { overflow-y: auto; max-height: 300px; }
+
+        /* ── Trade log ── */
+        .trade-entry { padding: 10px 14px; border-bottom: 1px solid #2A2E39; }
+        .trade-date  { font-size: 12px; font-weight: 600; margin-bottom: 5px; }
+        .trade-list  { list-style: none; padding: 0; }
+        .trade-list li {
+            font-size: 11px; color: #8D94A6; padding: 2px 0;
+        }
+        .trade-list li::before { content: "→ "; color: #2962FF; }
+    </style>
+</head>
+<body>
+
+<div class="grid-main">
+    <!-- Top Bar -->
+    <div class="header-bar panel">
+        <div class="top-bar-content">
+            <div class="metric-group">
+                <span class="metric-title">模擬交易組合</span>
+                <div>
+                    <span class="metric-val">$987,581</span>
+                    <span class="metric-sub" style="color:#22AB94;">+2.99% (1D)</span>
+                    <span class="metric-sub" style="color:#F05350; margin-left:12px;">-1.24% (All)</span>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="metric-group">
+                    <span class="metric-title">Equity</span>
+                    <span style="font-size:15px;font-weight:600;">$890,702</span>
+                </div>
+                <div class="metric-group">
+                    <span class="metric-title">Cash</span>
+                    <span style="font-size:15px;font-weight:600;">$96,880</span>
+                </div>
+                <div class="metric-group" style="text-align:right;">
+                    <span class="metric-title">Market Date</span>
+                    <span style="font-size:15px;font-weight:600;">2026-03-11</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Chart -->
+    <div class="panel chart-fill">
+        <div class="panel-header">Performance Curve</div>
+        <div style="flex:1; padding:0; min-height:300px;">
+            <div>                        <script>window.PlotlyConfig = {MathJaxConfig: 'local'};</script>
+        <script charset="utf-8" src="https://cdn.plot.ly/plotly-3.4.0.min.js" integrity="sha256-KEmPoupLpFyGMyGAiOsiNDbKDKAvxXAn/W+oQa0ZAfk=" crossorigin="anonymous"></script>                <div id="cb39d1e2-3cd7-4d75-a225-f6f2aa036f60" class="plotly-graph-div" style="height:100%; width:100%;"></div>            <script>                window.PLOTLYENV=window.PLOTLYENV || {};                                if (document.getElementById("cb39d1e2-3cd7-4d75-a225-f6f2aa036f60")) {                    Plotly.newPlot(                        "cb39d1e2-3cd7-4d75-a225-f6f2aa036f60",                        [{"fill":"tozeroy","fillcolor":"rgba(41, 98, 255, 0.15)","hoverinfo":"x+y","line":{"color":"#2962FF","width":2},"mode":"lines","x":["2026-03-03","2026-03-04","2026-03-05","2026-03-06","2026-03-09","2026-03-10","2026-03-11"],"y":[998607.8664682965,958135.3076723675,984431.839351521,984770.7412498568,941946.5686306811,958874.1181664325,987581.4237761355],"type":"scatter"}],                        {"template":{"data":{"histogram2dcontour":[{"type":"histogram2dcontour","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"choropleth":[{"type":"choropleth","colorbar":{"outlinewidth":0,"ticks":""}}],"histogram2d":[{"type":"histogram2d","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"heatmap":[{"type":"heatmap","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"contourcarpet":[{"type":"contourcarpet","colorbar":{"outlinewidth":0,"ticks":""}}],"contour":[{"type":"contour","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"surface":[{"type":"surface","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"mesh3d":[{"type":"mesh3d","colorbar":{"outlinewidth":0,"ticks":""}}],"scatter":[{"fillpattern":{"fillmode":"overlay","size":10,"solidity":0.2},"type":"scatter"}],"parcoords":[{"type":"parcoords","line":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatterpolargl":[{"type":"scatterpolargl","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"bar":[{"error_x":{"color":"#2a3f5f"},"error_y":{"color":"#2a3f5f"},"marker":{"line":{"color":"#E5ECF6","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"bar"}],"scattergeo":[{"type":"scattergeo","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatterpolar":[{"type":"scatterpolar","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"histogram":[{"marker":{"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"histogram"}],"scattergl":[{"type":"scattergl","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatter3d":[{"type":"scatter3d","line":{"colorbar":{"outlinewidth":0,"ticks":""}},"marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scattermap":[{"type":"scattermap","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scattermapbox":[{"type":"scattermapbox","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatterternary":[{"type":"scatterternary","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scattercarpet":[{"type":"scattercarpet","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"carpet":[{"aaxis":{"endlinecolor":"#2a3f5f","gridcolor":"white","linecolor":"white","minorgridcolor":"white","startlinecolor":"#2a3f5f"},"baxis":{"endlinecolor":"#2a3f5f","gridcolor":"white","linecolor":"white","minorgridcolor":"white","startlinecolor":"#2a3f5f"},"type":"carpet"}],"table":[{"cells":{"fill":{"color":"#EBF0F8"},"line":{"color":"white"}},"header":{"fill":{"color":"#C8D4E3"},"line":{"color":"white"}},"type":"table"}],"barpolar":[{"marker":{"line":{"color":"#E5ECF6","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"barpolar"}],"pie":[{"automargin":true,"type":"pie"}]},"layout":{"autotypenumbers":"strict","colorway":["#636efa","#EF553B","#00cc96","#ab63fa","#FFA15A","#19d3f3","#FF6692","#B6E880","#FF97FF","#FECB52"],"font":{"color":"#2a3f5f"},"hovermode":"closest","hoverlabel":{"align":"left"},"paper_bgcolor":"white","plot_bgcolor":"#E5ECF6","polar":{"bgcolor":"#E5ECF6","angularaxis":{"gridcolor":"white","linecolor":"white","ticks":""},"radialaxis":{"gridcolor":"white","linecolor":"white","ticks":""}},"ternary":{"bgcolor":"#E5ECF6","aaxis":{"gridcolor":"white","linecolor":"white","ticks":""},"baxis":{"gridcolor":"white","linecolor":"white","ticks":""},"caxis":{"gridcolor":"white","linecolor":"white","ticks":""}},"coloraxis":{"colorbar":{"outlinewidth":0,"ticks":""}},"colorscale":{"sequential":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"sequentialminus":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"diverging":[[0,"#8e0152"],[0.1,"#c51b7d"],[0.2,"#de77ae"],[0.3,"#f1b6da"],[0.4,"#fde0ef"],[0.5,"#f7f7f7"],[0.6,"#e6f5d0"],[0.7,"#b8e186"],[0.8,"#7fbc41"],[0.9,"#4d9221"],[1,"#276419"]]},"xaxis":{"gridcolor":"white","linecolor":"white","ticks":"","title":{"standoff":15},"zerolinecolor":"white","automargin":true,"zerolinewidth":2},"yaxis":{"gridcolor":"white","linecolor":"white","ticks":"","title":{"standoff":15},"zerolinecolor":"white","automargin":true,"zerolinewidth":2},"scene":{"xaxis":{"backgroundcolor":"#E5ECF6","gridcolor":"white","linecolor":"white","showbackground":true,"ticks":"","zerolinecolor":"white","gridwidth":2},"yaxis":{"backgroundcolor":"#E5ECF6","gridcolor":"white","linecolor":"white","showbackground":true,"ticks":"","zerolinecolor":"white","gridwidth":2},"zaxis":{"backgroundcolor":"#E5ECF6","gridcolor":"white","linecolor":"white","showbackground":true,"ticks":"","zerolinecolor":"white","gridwidth":2}},"shapedefaults":{"line":{"color":"#2a3f5f"}},"annotationdefaults":{"arrowcolor":"#2a3f5f","arrowhead":0,"arrowwidth":1},"geo":{"bgcolor":"white","landcolor":"#E5ECF6","subunitcolor":"white","showland":true,"showlakes":true,"lakecolor":"white"},"title":{"x":0.05},"mapbox":{"style":"light"}}},"margin":{"l":50,"r":20,"t":20,"b":40},"font":{"color":"#D1D4DC"},"xaxis":{"showgrid":true,"gridcolor":"#2B3139","tickcolor":"#8D94A6","fixedrange":false},"yaxis":{"showgrid":true,"gridcolor":"#2B3139","tickformat":",.0f","side":"right","tickcolor":"#8D94A6","range":[932527.1029443743,1008593.9451329794],"fixedrange":false},"plot_bgcolor":"#1E222D","paper_bgcolor":"#1E222D","hovermode":"x unified"},                        {"displayModeBar": true, "scrollZoom": true, "responsive": true}                    )                };            </script>        </div>
+        </div>
+    </div>
+
+    <!-- Right Sidebar -->
+    <div class="panel right-sidebar">
+        <div class="panel-header">Portfolio Allocation</div>
+
+        <div class="donut-wrapper">
+            <div class="donut-container">
+                <div>                            <div id="12b79dff-9083-430c-ac47-d4e3c1f09bf7" class="plotly-graph-div" style="height:185px; width:100%;"></div>            <script>                window.PLOTLYENV=window.PLOTLYENV || {};                                if (document.getElementById("12b79dff-9083-430c-ac47-d4e3c1f09bf7")) {                    Plotly.newPlot(                        "12b79dff-9083-430c-ac47-d4e3c1f09bf7",                        [{"hole":0.65,"hoverinfo":"label+percent","labels":["Cash","6861","1785","5386","8028","3357","6788","2331","5475","3374","2356","1560","3209","6196","6274","8081","6239","3406","5434","3042","2472","3090","1773","8261","8091","3231","8070","2889","2006","2838","2882","2881","3491","6005","6716","2207","2891","4915","3044","1608","6505"],"marker":{"colors":["#8D94A6","#2962FF","#1565C0","#42A5F5","#00BCD4","#26C6DA","#00ACC1","#29B6F6","#0288D1","#4CAF50","#00897B","#7E57C2","#9575CD","#FFA726","#FF7043","#546E7A","#78909C","#5C6BC0","#3949AB","#1E88E5","#039BE5","#2962FF","#1565C0","#42A5F5","#00BCD4","#26C6DA","#00ACC1","#29B6F6","#0288D1","#4CAF50","#00897B","#7E57C2","#9575CD","#FFA726","#FF7043","#546E7A","#78909C","#5C6BC0","#3949AB","#1E88E5","#039BE5"],"line":{"color":"#131722","width":1.5}},"textinfo":"none","values":[96879.86946247585,25506.0,24817.80094909668,23606.0,23541.0,23446.5,23282.5,23197.800359725952,23115.0,22945.0,22747.0,22677.5,22671.90047454834,22594.0,22471.0,22413.0,22412.0,22392.5,22378.0,22254.3003616333,22252.5,22200.0,22121.5,22119.0,22113.0,22078.0,22049.65077972412,21953.75,21850.800399780273,21800.0,21755.400924682617,21675.59925842285,21505.0,21404.250288009644,21381.5,21378.0,21299.200317382812,21252.800903320312,21092.5,21005.599060058594,17944.70023727417],"type":"pie"}],                        {"template":{"data":{"histogram2dcontour":[{"type":"histogram2dcontour","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"choropleth":[{"type":"choropleth","colorbar":{"outlinewidth":0,"ticks":""}}],"histogram2d":[{"type":"histogram2d","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"heatmap":[{"type":"heatmap","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"contourcarpet":[{"type":"contourcarpet","colorbar":{"outlinewidth":0,"ticks":""}}],"contour":[{"type":"contour","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"surface":[{"type":"surface","colorbar":{"outlinewidth":0,"ticks":""},"colorscale":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]]}],"mesh3d":[{"type":"mesh3d","colorbar":{"outlinewidth":0,"ticks":""}}],"scatter":[{"fillpattern":{"fillmode":"overlay","size":10,"solidity":0.2},"type":"scatter"}],"parcoords":[{"type":"parcoords","line":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatterpolargl":[{"type":"scatterpolargl","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"bar":[{"error_x":{"color":"#2a3f5f"},"error_y":{"color":"#2a3f5f"},"marker":{"line":{"color":"#E5ECF6","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"bar"}],"scattergeo":[{"type":"scattergeo","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatterpolar":[{"type":"scatterpolar","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"histogram":[{"marker":{"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"histogram"}],"scattergl":[{"type":"scattergl","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatter3d":[{"type":"scatter3d","line":{"colorbar":{"outlinewidth":0,"ticks":""}},"marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scattermap":[{"type":"scattermap","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scattermapbox":[{"type":"scattermapbox","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scatterternary":[{"type":"scatterternary","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"scattercarpet":[{"type":"scattercarpet","marker":{"colorbar":{"outlinewidth":0,"ticks":""}}}],"carpet":[{"aaxis":{"endlinecolor":"#2a3f5f","gridcolor":"white","linecolor":"white","minorgridcolor":"white","startlinecolor":"#2a3f5f"},"baxis":{"endlinecolor":"#2a3f5f","gridcolor":"white","linecolor":"white","minorgridcolor":"white","startlinecolor":"#2a3f5f"},"type":"carpet"}],"table":[{"cells":{"fill":{"color":"#EBF0F8"},"line":{"color":"white"}},"header":{"fill":{"color":"#C8D4E3"},"line":{"color":"white"}},"type":"table"}],"barpolar":[{"marker":{"line":{"color":"#E5ECF6","width":0.5},"pattern":{"fillmode":"overlay","size":10,"solidity":0.2}},"type":"barpolar"}],"pie":[{"automargin":true,"type":"pie"}]},"layout":{"autotypenumbers":"strict","colorway":["#636efa","#EF553B","#00cc96","#ab63fa","#FFA15A","#19d3f3","#FF6692","#B6E880","#FF97FF","#FECB52"],"font":{"color":"#2a3f5f"},"hovermode":"closest","hoverlabel":{"align":"left"},"paper_bgcolor":"white","plot_bgcolor":"#E5ECF6","polar":{"bgcolor":"#E5ECF6","angularaxis":{"gridcolor":"white","linecolor":"white","ticks":""},"radialaxis":{"gridcolor":"white","linecolor":"white","ticks":""}},"ternary":{"bgcolor":"#E5ECF6","aaxis":{"gridcolor":"white","linecolor":"white","ticks":""},"baxis":{"gridcolor":"white","linecolor":"white","ticks":""},"caxis":{"gridcolor":"white","linecolor":"white","ticks":""}},"coloraxis":{"colorbar":{"outlinewidth":0,"ticks":""}},"colorscale":{"sequential":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"sequentialminus":[[0.0,"#0d0887"],[0.1111111111111111,"#46039f"],[0.2222222222222222,"#7201a8"],[0.3333333333333333,"#9c179e"],[0.4444444444444444,"#bd3786"],[0.5555555555555556,"#d8576b"],[0.6666666666666666,"#ed7953"],[0.7777777777777778,"#fb9f3a"],[0.8888888888888888,"#fdca26"],[1.0,"#f0f921"]],"diverging":[[0,"#8e0152"],[0.1,"#c51b7d"],[0.2,"#de77ae"],[0.3,"#f1b6da"],[0.4,"#fde0ef"],[0.5,"#f7f7f7"],[0.6,"#e6f5d0"],[0.7,"#b8e186"],[0.8,"#7fbc41"],[0.9,"#4d9221"],[1,"#276419"]]},"xaxis":{"gridcolor":"white","linecolor":"white","ticks":"","title":{"standoff":15},"zerolinecolor":"white","automargin":true,"zerolinewidth":2},"yaxis":{"gridcolor":"white","linecolor":"white","ticks":"","title":{"standoff":15},"zerolinecolor":"white","automargin":true,"zerolinewidth":2},"scene":{"xaxis":{"backgroundcolor":"#E5ECF6","gridcolor":"white","linecolor":"white","showbackground":true,"ticks":"","zerolinecolor":"white","gridwidth":2},"yaxis":{"backgroundcolor":"#E5ECF6","gridcolor":"white","linecolor":"white","showbackground":true,"ticks":"","zerolinecolor":"white","gridwidth":2},"zaxis":{"backgroundcolor":"#E5ECF6","gridcolor":"white","linecolor":"white","showbackground":true,"ticks":"","zerolinecolor":"white","gridwidth":2}},"shapedefaults":{"line":{"color":"#2a3f5f"}},"annotationdefaults":{"arrowcolor":"#2a3f5f","arrowhead":0,"arrowwidth":1},"geo":{"bgcolor":"white","landcolor":"#E5ECF6","subunitcolor":"white","showland":true,"showlakes":true,"lakecolor":"white"},"title":{"x":0.05},"mapbox":{"style":"light"}}},"margin":{"l":8,"r":8,"t":8,"b":8},"font":{"color":"#D1D4DC"},"showlegend":false,"plot_bgcolor":"#1E222D","paper_bgcolor":"#1E222D","height":185},                        {"displayModeBar": false, "responsive": true}                    )                };            </script>        </div>
+                <div class="donut-label">
+                    <div class="donut-val">40</div>
+                    <div class="donut-sub">Positions</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel-header" style="border-top:none;">Current Holdings</div>
+        <div class="tbl-header">
+            <div class="col-ticker">Symbol / 名稱</div>
+            <div class="col-right">Price</div>
+            <div class="col-right">Shares</div>
+            <div class="col-right">Value</div>
+            <div class="col-right">Weight</div>
+        </div>
+        <div class="holdings-scroll">
+            
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">6861</span>
+            <span class="stock-name">睿生光電</span>
+        </div>
+        <div class="col-right">163.50</div>
+        <div class="col-right">156</div>
+        <div class="col-right">$25,506</div>
+        <div class="col-right" style="color:#2962FF; font-weight:600;">2.6%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">1785</span>
+            <span class="stock-name">光洋科</span>
+        </div>
+        <div class="col-right">79.80</div>
+        <div class="col-right">311</div>
+        <div class="col-right">$24,818</div>
+        <div class="col-right" style="color:#1565C0; font-weight:600;">2.5%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">5386</span>
+            <span class="stock-name">青雲</span>
+        </div>
+        <div class="col-right">319.00</div>
+        <div class="col-right">74</div>
+        <div class="col-right">$23,606</div>
+        <div class="col-right" style="color:#42A5F5; font-weight:600;">2.4%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">8028</span>
+            <span class="stock-name">昇陽半導體</span>
+        </div>
+        <div class="col-right">177.00</div>
+        <div class="col-right">133</div>
+        <div class="col-right">$23,541</div>
+        <div class="col-right" style="color:#00BCD4; font-weight:600;">2.4%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">3357</span>
+            <span class="stock-name">臺慶科</span>
+        </div>
+        <div class="col-right">159.50</div>
+        <div class="col-right">147</div>
+        <div class="col-right">$23,446</div>
+        <div class="col-right" style="color:#26C6DA; font-weight:600;">2.4%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">6788</span>
+            <span class="stock-name">華景電</span>
+        </div>
+        <div class="col-right">347.50</div>
+        <div class="col-right">67</div>
+        <div class="col-right">$23,282</div>
+        <div class="col-right" style="color:#00ACC1; font-weight:600;">2.4%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">2331</span>
+            <span class="stock-name">精英</span>
+        </div>
+        <div class="col-right">24.60</div>
+        <div class="col-right">943</div>
+        <div class="col-right">$23,198</div>
+        <div class="col-right" style="color:#29B6F6; font-weight:600;">2.3%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">5475</span>
+            <span class="stock-name">德宏</span>
+        </div>
+        <div class="col-right">201.00</div>
+        <div class="col-right">115</div>
+        <div class="col-right">$23,115</div>
+        <div class="col-right" style="color:#0288D1; font-weight:600;">2.3%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">3374</span>
+            <span class="stock-name">精材</span>
+        </div>
+        <div class="col-right">176.50</div>
+        <div class="col-right">130</div>
+        <div class="col-right">$22,945</div>
+        <div class="col-right" style="color:#4CAF50; font-weight:600;">2.3%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">2356</span>
+            <span class="stock-name">英業達</span>
+        </div>
+        <div class="col-right">43.00</div>
+        <div class="col-right">529</div>
+        <div class="col-right">$22,747</div>
+        <div class="col-right" style="color:#00897B; font-weight:600;">2.3%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">1560</span>
+            <span class="stock-name">中砂</span>
+        </div>
+        <div class="col-right">482.50</div>
+        <div class="col-right">47</div>
+        <div class="col-right">$22,678</div>
+        <div class="col-right" style="color:#7E57C2; font-weight:600;">2.3%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">3209</span>
+            <span class="stock-name">全科</span>
+        </div>
+        <div class="col-right">36.45</div>
+        <div class="col-right">622</div>
+        <div class="col-right">$22,672</div>
+        <div class="col-right" style="color:#9575CD; font-weight:600;">2.3%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">6196</span>
+            <span class="stock-name">帆宣</span>
+        </div>
+        <div class="col-right">286.00</div>
+        <div class="col-right">79</div>
+        <div class="col-right">$22,594</div>
+        <div class="col-right" style="color:#FFA726; font-weight:600;">2.3%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">6274</span>
+            <span class="stock-name">台燿</span>
+        </div>
+        <div class="col-right">488.50</div>
+        <div class="col-right">46</div>
+        <div class="col-right">$22,471</div>
+        <div class="col-right" style="color:#FF7043; font-weight:600;">2.3%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">8081</span>
+            <span class="stock-name">致新</span>
+        </div>
+        <div class="col-right">241.00</div>
+        <div class="col-right">93</div>
+        <div class="col-right">$22,413</div>
+        <div class="col-right" style="color:#546E7A; font-weight:600;">2.3%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">6239</span>
+            <span class="stock-name">力成</span>
+        </div>
+        <div class="col-right">215.50</div>
+        <div class="col-right">104</div>
+        <div class="col-right">$22,412</div>
+        <div class="col-right" style="color:#78909C; font-weight:600;">2.3%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">3406</span>
+            <span class="stock-name">玉晶光</span>
+        </div>
+        <div class="col-right">422.50</div>
+        <div class="col-right">53</div>
+        <div class="col-right">$22,392</div>
+        <div class="col-right" style="color:#5C6BC0; font-weight:600;">2.3%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">5434</span>
+            <span class="stock-name">崇越</span>
+        </div>
+        <div class="col-right">334.00</div>
+        <div class="col-right">67</div>
+        <div class="col-right">$22,378</div>
+        <div class="col-right" style="color:#3949AB; font-weight:600;">2.3%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">3042</span>
+            <span class="stock-name">晶技</span>
+        </div>
+        <div class="col-right">93.90</div>
+        <div class="col-right">237</div>
+        <div class="col-right">$22,254</div>
+        <div class="col-right" style="color:#1E88E5; font-weight:600;">2.3%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">2472</span>
+            <span class="stock-name">立隆電</span>
+        </div>
+        <div class="col-right">107.50</div>
+        <div class="col-right">207</div>
+        <div class="col-right">$22,252</div>
+        <div class="col-right" style="color:#039BE5; font-weight:600;">2.3%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">3090</span>
+            <span class="stock-name">日電貿</span>
+        </div>
+        <div class="col-right">92.50</div>
+        <div class="col-right">240</div>
+        <div class="col-right">$22,200</div>
+        <div class="col-right" style="color:#2962FF; font-weight:600;">2.2%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">1773</span>
+            <span class="stock-name">勝一</span>
+        </div>
+        <div class="col-right">146.50</div>
+        <div class="col-right">151</div>
+        <div class="col-right">$22,122</div>
+        <div class="col-right" style="color:#1565C0; font-weight:600;">2.2%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">8261</span>
+            <span class="stock-name">富鼎</span>
+        </div>
+        <div class="col-right">101.00</div>
+        <div class="col-right">219</div>
+        <div class="col-right">$22,119</div>
+        <div class="col-right" style="color:#42A5F5; font-weight:600;">2.2%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">8091</span>
+            <span class="stock-name">翔名</span>
+        </div>
+        <div class="col-right">136.50</div>
+        <div class="col-right">162</div>
+        <div class="col-right">$22,113</div>
+        <div class="col-right" style="color:#00BCD4; font-weight:600;">2.2%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">3231</span>
+            <span class="stock-name">緯創</span>
+        </div>
+        <div class="col-right">133.00</div>
+        <div class="col-right">166</div>
+        <div class="col-right">$22,078</div>
+        <div class="col-right" style="color:#26C6DA; font-weight:600;">2.2%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">8070</span>
+            <span class="stock-name">長華*</span>
+        </div>
+        <div class="col-right">43.15</div>
+        <div class="col-right">511</div>
+        <div class="col-right">$22,050</div>
+        <div class="col-right" style="color:#00ACC1; font-weight:600;">2.2%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">2889</span>
+            <span class="stock-name">國票金</span>
+        </div>
+        <div class="col-right">16.25</div>
+        <div class="col-right">1351</div>
+        <div class="col-right">$21,954</div>
+        <div class="col-right" style="color:#29B6F6; font-weight:600;">2.2%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">2006</span>
+            <span class="stock-name">東和鋼鐵</span>
+        </div>
+        <div class="col-right">83.40</div>
+        <div class="col-right">262</div>
+        <div class="col-right">$21,851</div>
+        <div class="col-right" style="color:#0288D1; font-weight:600;">2.2%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">2838</span>
+            <span class="stock-name">聯邦銀</span>
+        </div>
+        <div class="col-right">20.00</div>
+        <div class="col-right">1090</div>
+        <div class="col-right">$21,800</div>
+        <div class="col-right" style="color:#4CAF50; font-weight:600;">2.2%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">2882</span>
+            <span class="stock-name">國泰金</span>
+        </div>
+        <div class="col-right">71.80</div>
+        <div class="col-right">303</div>
+        <div class="col-right">$21,755</div>
+        <div class="col-right" style="color:#00897B; font-weight:600;">2.2%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">2881</span>
+            <span class="stock-name">富邦金</span>
+        </div>
+        <div class="col-right">89.20</div>
+        <div class="col-right">243</div>
+        <div class="col-right">$21,676</div>
+        <div class="col-right" style="color:#7E57C2; font-weight:600;">2.2%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">3491</span>
+            <span class="stock-name">昇達科</span>
+        </div>
+        <div class="col-right">1265.00</div>
+        <div class="col-right">17</div>
+        <div class="col-right">$21,505</div>
+        <div class="col-right" style="color:#9575CD; font-weight:600;">2.2%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">6005</span>
+            <span class="stock-name">群益證</span>
+        </div>
+        <div class="col-right">28.35</div>
+        <div class="col-right">755</div>
+        <div class="col-right">$21,404</div>
+        <div class="col-right" style="color:#FFA726; font-weight:600;">2.2%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">6716</span>
+            <span class="stock-name">應廣</span>
+        </div>
+        <div class="col-right">74.50</div>
+        <div class="col-right">287</div>
+        <div class="col-right">$21,382</div>
+        <div class="col-right" style="color:#FF7043; font-weight:600;">2.2%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">2207</span>
+            <span class="stock-name">和泰車</span>
+        </div>
+        <div class="col-right">509.00</div>
+        <div class="col-right">42</div>
+        <div class="col-right">$21,378</div>
+        <div class="col-right" style="color:#546E7A; font-weight:600;">2.2%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">2891</span>
+            <span class="stock-name">中信金</span>
+        </div>
+        <div class="col-right">51.20</div>
+        <div class="col-right">416</div>
+        <div class="col-right">$21,299</div>
+        <div class="col-right" style="color:#78909C; font-weight:600;">2.2%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">4915</span>
+            <span class="stock-name">致伸</span>
+        </div>
+        <div class="col-right">71.80</div>
+        <div class="col-right">296</div>
+        <div class="col-right">$21,253</div>
+        <div class="col-right" style="color:#5C6BC0; font-weight:600;">2.2%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">3044</span>
+            <span class="stock-name">健鼎</span>
+        </div>
+        <div class="col-right">357.50</div>
+        <div class="col-right">59</div>
+        <div class="col-right">$21,092</div>
+        <div class="col-right" style="color:#3949AB; font-weight:600;">2.1%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">1608</span>
+            <span class="stock-name">華榮</span>
+        </div>
+        <div class="col-right">34.10</div>
+        <div class="col-right">616</div>
+        <div class="col-right">$21,006</div>
+        <div class="col-right" style="color:#1E88E5; font-weight:600;">2.1%</div>
+    </div>
+    <div class="table-row">
+        <div class="col-ticker">
+            <span class="stock-id">6505</span>
+            <span class="stock-name">台塑化</span>
+        </div>
+        <div class="col-right">57.70</div>
+        <div class="col-right">311</div>
+        <div class="col-right">$17,945</div>
+        <div class="col-right" style="color:#039BE5; font-weight:600;">1.8%</div>
+    </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bottom: NAV History + Trade Log -->
+<div class="grid-bottom">
+    <div class="panel">
+        <div class="panel-header">每日淨值歷史（最近30天）</div>
+        <div class="scroll-body">
+            <table class="history-table">
+                <thead><tr><th>日期</th><th>淨值 (NAV)</th><th>當日報酬</th></tr></thead>
+                <tbody>
+    <tr>
+        <td>2026-03-11</td>
+        <td>$987,581</td>
+        <td style="color:#22AB94;">+2.99%</td>
+    </tr>
+    <tr>
+        <td>2026-03-10</td>
+        <td>$958,874</td>
+        <td style="color:#22AB94;">+1.80%</td>
+    </tr>
+    <tr>
+        <td>2026-03-09</td>
+        <td>$941,947</td>
+        <td style="color:#F05350;">-4.35%</td>
+    </tr>
+    <tr>
+        <td>2026-03-06</td>
+        <td>$984,771</td>
+        <td style="color:#22AB94;">+0.03%</td>
+    </tr>
+    <tr>
+        <td>2026-03-05</td>
+        <td>$984,432</td>
+        <td style="color:#22AB94;">+2.74%</td>
+    </tr>
+    <tr>
+        <td>2026-03-04</td>
+        <td>$958,135</td>
+        <td style="color:#F05350;">-4.05%</td>
+    </tr>
+    <tr>
+        <td>2026-03-03</td>
+        <td>$998,608</td>
+        <td style="color:#F05350;">-0.14%</td>
+    </tr></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div class="panel-header">交易紀錄 &amp; 損益明細</div>
+        <div class="scroll-body">
+            
+        <div class="trade-entry">
+            <div class="trade-date">2026-03-09　實現損益: <span style="color:#F05350;">-41,660</span></div>
+            <ul class="trade-list"><li>賣出 1326 台化 964股成本@46.05 賣@43.0 實現-3,113</li><li>賣出 1560 中砂 91股成本@486.99 賣@450.5 實現-3,497</li><li>賣出 1608 華榮 1284股成本@34.58 賣@34.4 實現-476</li><li>賣出 1773 勝一 297股成本@149.15 賣@139.9 實現-2,943</li><li>賣出 2006 東和鋼鐵 551股成本@80.48 賣@80.8 實現-10</li><li>賣出 2207 和泰車 86股成本@512.51 賣@504.5 實現-881</li><li>賣出 2301 光寶科 279股成本@159.16 賣@148.9 實現-3,060</li><li>賣出 2331 精英 1833股成本@24.22 賣@22.5 實現-3,384</li><li>賣出 2347 聯強 629股成本@70.57 賣@68.4 實現-1,536</li><li>賣出 2355 敬鵬 1021股成本@43.49 賣@40.5 實現-3,230</li><li>賣出 2356 英業達 1061股成本@41.84 賣@40.0 實現-2,131</li><li>賣出 2472 立隆電 392股成本@113.11 賣@102.4 實現-4,378</li><li>賣出 2606 裕民 696股成本@63.76 賣@60.3 實現-2,569</li><li>賣出 2633 台灣高鐵 1674股成本@26.53 賣@26.1 實現-868</li><li>賣出 2801 彰銀 2138股成本@20.77 賣@20.3 實現-1,135</li><li>賣出 2881 富邦金 499股成本@88.89 賣@87.1 實現-1,079</li><li>賣出 2883 凱基金 2174股成本@20.42 賣@19.5 實現-2,123</li><li>賣出 5386 青雲 170股成本@260.26 賣@285.7 實現+4,112</li><li>賣出 6716 應廣 540股成本@82.18 賣@73.8 實現-4,689</li><li>賣出 6861 睿生光電 294股成本@150.65 賣@135.4 實現-4,670</li><li>買進 1560 中砂 47股 @451.5 成本 21,248</li><li>買進 1608 華榮 616股 @34.4 成本 21,242</li><li>買進 1773 勝一 151股 @140.1 成本 21,191</li><li>買進 1785 光洋科 311股 @68.1 成本 21,199</li><li>買進 2006 東和鋼鐵 262股 @81.0 成本 21,247</li></ul>
+        </div>
+        <div class="trade-entry">
+            <div class="trade-date">2026-03-06　實現損益: <span style="color:#F05350;">-12,664</span></div>
+            <ul class="trade-list"><li>賣出 2536 宏普 2027股成本@24.17 賣@23.1 實現-2,431</li><li>賣出 3056 富華新 2893股成本@16.97 賣@16.9 實現-315</li><li>賣出 3211 順達 158股成本@309.31 賣@321.7 實現+1,729</li><li>賣出 3224 三顧 1150股成本@42.59 賣@41.6 實現-1,344</li><li>賣出 3529 力旺 20股成本@2337.34 賣@2387.6 實現+794</li><li>賣出 4127 天良 1353股成本@36.24 賣@36.1 實現-382</li><li>賣出 4549 桓達 482股成本@101.60 賣@98.5 實現-1,704</li><li>賣出 4746 台耀 903股成本@54.35 賣@52.6 實現-1,752</li><li>賣出 4931 新盛力 346股成本@141.64 賣@131.9 實現-3,584</li><li>賣出 5353 台林 1967股成本@24.92 賣@23.9 實現-2,173</li><li>賣出 5438 東友 2247股成本@21.82 賣@22.0 實現+244</li><li>賣出 6180 橘子 962股成本@50.95 賣@50.7 實現-410</li><li>賣出 6558 興能高 1521股成本@32.23 賣@30.6 實現-2,659</li><li>賣出 6589 台康生技 810股成本@60.46 賣@59.7 實現-797</li><li>賣出 8104 錸寶 1330股成本@36.84 賣@35.9 實現-1,505</li><li>賣出 2543 皇昌 701股成本@69.87 賣@78.3 實現+5,682</li><li>賣出 2929 淘帝-KY 6796股成本@7.22 賣@7.3 實現+226</li><li>賣出 4577 達航科技 544股成本@90.09 賣@93.4 實現+1,579</li><li>賣出 4558 寶緯 2571股成本@19.07 賣@18.9 實現-570</li><li>賣出 5314 世紀* 576股成本@85.08 賣@79.7 實現-3,293</li><li>買進 1326 台化 964股 @46.0 成本 44,452</li><li>買進 1560 中砂 91股 @487.0 成本 44,379</li><li>買進 1608 華榮 1284股 @34.6 成本 44,470</li><li>買進 1773 勝一 297股 @149.1 成本 44,360</li><li>買進 2006 東和鋼鐵 551股 @80.5 成本 44,408</li></ul>
+        </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
