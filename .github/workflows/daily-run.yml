@@ -3,8 +3,8 @@ name: Daily Quant Update
 # 每日台灣時間 15:30 後執行（UTC 07:30，週一到週五）
 # 可在 GitHub Actions 頁面手動觸發
 on:
-  schedule:
-    - cron: '30 7 * * 1-5'
+#  schedule:
+#    - cron: '30 7 * * 1-5'
   workflow_dispatch:
 
 jobs:
