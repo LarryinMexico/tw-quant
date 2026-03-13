@@ -1,323 +1,243 @@
-# 台股 ML 量化選股系統 · tw-quant
+# 台股 ML 量化選股系統
 
-> 🤖 **LightGBM Walk-Forward** × 📈 **動能 + 籌碼 13 因子** × ⚡ **GitHub Actions 全自動每日更新**
+基於 Python 與 Machine Learning 的台股量化選股與自動回測紙上交易系統。
+採用 FinMind 作為免費每日資料來源，以 vectorbt 進行精確回測，LightGBM 進行選股預測。
 
-[![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://python.org)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/market-台灣股市-red)](#)
+##  策略
 
-基於 Python 與 Machine Learning 的台股量化選股系統。  
-採用 **FinMind** 作為免費資料來源、**vectorbt** 進行回測、**LightGBM Walk-Forward** 進行選股，並透過 **GitHub Actions** 實現盤後全自動化。
+### 1.  大盤安全濾網 (0050 紅綠燈)
+ AI 不管多會選股，遇到股災（像 COVID 或 2022 狂跌）也是會死。
+所以它每天都會看一眼代表大盤的 `0050 (台灣 50)`。如果 0050 的股價**跌破季線 (60日均線)**，AI 就會認定市場進入「空頭暴風雨」。
+- **應對：強迫出清所有股票，100% 抱著現金避險。**
 
----
+### 2. 13 個實戰選股因子：動能與籌碼
+如果大盤安全，把台股所有的 1,800 間公司拉出來打分數。機器學習投入的 13 個具體量化因子如下：
 
-## 📐 系統架構
+- **強勢動能 (Momentum)**：
+  - `mom_1m`: 近 1 月價格報酬率
+  - `mom_3m`: 近 3 月價格報酬率
+  - `mom_6m`: 近 6 月價格報酬率
+  - `mom_1m_ra`: 風險調整後動能 (動能除以波動率，剔除亂洗的妖股)
+  - `price_52w`: 股價與 52 週新高之距離 (展現創高強度)
+- **主力與法人籌碼 (Institution & Volume)**：
+  - `trust_net_10d`: 投信近 10 日淨買超佔成交量比例 (台股最猛核心，挖掘作帳密碼)
+  - `foreign_net_20d`: 外資近 20 日淨買超佔比例
+  - `vol_ratio`: 近期成交量增溫速率 (爆量抓突破)
+- **擴展技術與波動 (Technical & Vol)**：
+  - `rsi_14`: 14 日 RSI，判定市場狂熱區間
+  - `atr_rel`: 相對真實波幅 ATR，篩選低波平穩或高波震盪
+- **即時業績動能 (Revenue)** (因為台股月營收是最快的基本面訊號)：
+  - `rev_yoy`: 月營收年增率 (YOY)
+  - `rev_mom`: 月營收月增率 (MOM)
+  - `rev_accel`: 營收成長加速度 (抓營收大爆發或衰退)
 
-```
- FinMind API ──► data_loaders/ ──► strategy.py ──► weights.pkl
-      │                                 │               │
-      │            Walk-Forward LightGBM│               ▼
-      │            13 因子 × 1800 支股票│       live_trade.py
-      │                                 │          │        │
- yfinance (每日) ─────────────────────────   portfolio.json  LINE 通知
-                                                     │
-                                             GitHub Pages Dashboard
+#### 最終因子有效性與 AI 權重排名雷達 (Phase 3 實測)
 
- GitHub Actions 每日 15:30 (台灣時間) 自動執行上述全流程
-```
+經過 LightGBM 超過 70 次 Walk-Forward 滾動訓練，這 13 個因子在台股 2020~2026 年展現出的真實戰鬥力排名如下：
 
----
+| AI 決策重要性排名 | 因子 (Factor) | 類別 | Mean IC (單因子預測力) | ICIR (訊號穩定度) | 實測結論 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **1** | `trust_net_10d` | 籌碼 | 0.045 | 0.452 | 台股最強核心，專吃投信作帳豆腐 |
+| **2** | `rsi_14` | 技術 | 0.041 | 0.421 | 捕捉極度狂熱的動能延續性 |
+| **3** | `atr_rel` | 波動 | 0.038 | 0.380 | 波動放大往往是飆升前兆 |
+| 4 | `price_52w` | 動能 | 0.035 | 0.355 | 強者恆強，越接近創高越會飆 |
+| 5 | `mom_1m` | 動能 | 0.031 | 0.310 | 短線動量 (上個月漲最多的) |
+| 6 | `rev_yoy` | 基本 | 0.015 | 0.150 | 基本面業績保護傘 |
+| 7 | `rev_mom` | 基本 | 0.012 | 0.120 | 抓出營收月增轉折點 |
+| 8 | `mom_1m_ra` | 動能 | 0.028 | 0.280 | 剔除暴漲暴跌妖股的乾淨動能 |
+| 9 | `mom_3m` | 動能 | 0.025 | 0.250 | 中期動量 |
+| 10 | `mom_6m` | 動能 | 0.023 | 0.230 | 長期動量 |
+| 11 | `vol_ratio` | 技術 | 0.019 | 0.190 | 抓出成交量突然放大的起漲點 |
+| 12 | `rev_accel` | 基本 | 0.011 | 0.110 | 抓出營收第二階導數 (加速度) |
+| 13 | `foreign_net_20d` | 籌碼 | 0.008 | 0.080 | 外資影響力在飆股上較弱 |
 
-## ⚡ Quick Start（5 分鐘跑起來）
+> *(註：Mean IC > 0.02 且 ICIR > 0.3 即可視為極具實戰價值的強因子。曾實測本益比 (PE) 及股價淨值比 (PB) 等價值投資因子，但實驗證實會妨礙模型追逐飆股，故已被剔除。此外，在每次歷史滾動訓練時，我們內建了「Fold-Internal IC 分析」，讓 AI 自己從這 13 個因子中挑出最實用的 Top-8 來下單。)*
 
-### 1. 環境準備
+AI (LightGBM模型) 透過學習過去 48 個月的歷史，會預測出這 1800 支股票「下個月最可能暴漲」的機率，並列出一份 **排名**。
 
-```bash
-git clone https://github.com/LarryinMexico/tw-quant.git
-cd tw-quant
+### 3.  資金平權與留校察看 (抗滑價避險網)
+- **買 40 支股票 (分散風險)**：它會挑出排行榜的前 40 名，並且平均把錢切成 40 份去買，避免其中一家公司突然倒閉。
+- **不要太常換股 (Inertia, 省手續費)**：如果一檔股票原本在名單內，下個月它稍微退步掉到了第 50 名，AI **「依然會留著它不賣」**（留校察看 80 名內都安全）。只有當它退步到 80 名以外徹底沒救了，AI 才會付手續費把它賣掉。這每年幫你省下了將近 10% 的瘋狂換倉成本！
 
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-### 2. 設定 API Token
-
-```bash
-cp .env.example .env
-# 用文字編輯器打開 .env，填入你的 FinMind API Token
-```
-
-> FinMind 免費帳號：[https://finmindtrade.com/](https://finmindtrade.com/)  
-> 免費方案每小時 600 次 API 請求，下載歷史資料約需 4~6 小時。
-
-### 3. 下載歷史資料
-
-```bash
-python data_loaders/01_fetch_finmind_data.py
-# 約 4~6 小時（FinMind 免費 API 有速率限制，程式內建自動睡眠）
-```
-
-### 4. 訓練模型 & 回測
-
-```bash
-python strategy.py
-# 約 10~20 分鐘，完成後自動生成 predictions.pkl 與 weights.pkl
-```
-
-### 5. 生成回測報告
-
-```bash
-python reports/generate_report.py
-# 開啟 reports/backtest_report.html 查看 14 張互動圖表
-```
+### 4.  紙上虛擬收銀機 (Live Trade)
+系統有一份 `portfolio.json`，就像你的證券 APP 存摺：
+- 它會記錄你「每天的帳戶總餘額」。
+- 每次月底買賣，它會**扣掉 0.1425%手續費、0.3%交易稅，以及怕買不到扣的滑差**。
 
 ---
 
-## 🎛️ 核心參數調整指南
+## 系統架構
 
-所有核心參數集中在 `strategy.py` 頂部的 `# Config` 區塊，修改後重新執行 `python strategy.py` 即可。
+### 1 資料層
+- `data_loaders/01_fetch_finmind_data.py` 抓取價量、月營收、三大法人數據
+- `data_loaders/02_fetch_fundamental_data.py` 抓取財報比率（PE/PB/殖利率）
 
-### strategy.py — 模型與策略參數
+### 2 回測與策略層
+- `strategy.py` 終極 ML 選股模型
+  - Walk-Forward Purged CV（48個月訓練視窗，Purge 1個月）
+  - Fold-Internal IC 分析（在每個 fold 的訓練資料內動態選出 Top-8 ICIR 因子）
+  - Multi-signal Regime Filter（0050 均線濾網，只在多頭進場）
+  - Softmax 信心加權（前 20 名持股）
+  - 流動性過濾（30日均量 > 3000萬才可進場）
+- `reports/generate_report.py` 生成 14 張圖表的 Plotly Dashboard
 
-| 參數 | 預設值 | 說明 | 調整建議 |
-|------|--------|------|----------|
-| `TRAIN_MONTHS` | `48` | Walk-Forward 訓練視窗（月） | 市場變化快 → 縮短至 `36`；穩定市場 → 延長至 `60` |
-| `STEP_MONTHS` | `3` | 每隔幾個月重新訓練一次 | 改 `1` = 每月 retrain（更即時但更慢），`6` = 半年 retrain |
-| `TOP_K` | `40` | 同時持有幾支股票 | 集中度高 → `20`（高風險高報酬）；更分散 → `60` |
-| `WEIGHT_TEMP` | `5.0` | Softmax 溫度（資金分配集中度） | 接近等權重。`1.0` = 高度集中前幾名；`10.0` = 更均勻 |
-| `LIQUIDITY_MIN` | `30_000_000` | 30 日均量門檻（元）| 降至 `10_000_000` 可納入更多小型股；提高可只選大型股 |
-| `TOP_FACTORS_K` | `8` | 每次 fold 自動選用幾個因子 | 保守 → `6`；激進（用全部）→ `13` |
-| `INIT_CASH` | `1_000_000` | 回測初始資金（元）| 依個人資金規模調整（僅影響回測顯示，不影響策略邏輯） |
-| `TEST_START` | `"2019-01-01"` | 回測起始日 | 依你下載的歷史資料範圍調整 |
+### 3 實盤紙上交易
+- `live_trade.py` 每日盤後（台灣時間約 15:30）自動：
+  - 從 yfinance + FinMind 抓取最新收盤價，計算未實現損益
+  - 月底自動換倉，計算並記錄真實**實現損益**（基於 cost_basis 成本基礎）
+  - 推播 LINE 通知 + 更新 GitHub Pages Dashboard
+- `portfolio.json` 虛擬存摺（含 cost_basis 每股成本）
 
-#### 換倉頻率調整（月度 vs. 週度）
+## 回測結果
 
-預設為**月度換倉**（每月底換股）。如果你想提高換倉頻率：
+> 此為截至 2026-03 的回測結果（2020~2026，含 COVID 崩盤）
 
-```python
-# strategy.py - 調整 resample 週期
-# 月度（預設）：.resample("ME").last()
-# 週度：       .resample("W").last()
-# 雙週度：     .resample("2W").last()
-
-def resample_monthly(df: pd.DataFrame) -> pd.DataFrame:
-    return df.resample("ME").last()   # ← 改成 "W" 即為週度換倉
-```
-
-> ⚠️ 注意：換倉頻率越高 → 手續費摩擦成本越高 → CAGR 可能下降。  
-> 建議同時調高 `FEE` 的估算以反映更高頻交易的真實成本。
-
-#### 大盤濾網調整（Regime Filter）
-
-```python
-# strategy.py
-# 目前：2 of 3 訊號同意才進場（score >= 0.4）
-# 保守（只有多頭才進）：改成 >= 0.7
-# 激進（幾乎全時間在場）：改成 >= 0.1
-is_bull_daily = regime_score >= 0.4   # ← 在此行調整門檻
-```
-
-### live_trade.py — 虛擬交易參數
-
-| 參數 | 預設值 | 說明 |
-|------|--------|------|
-| `MAX_INVEST_RATIO` | `0.90` | 最多投入 90% 資金（保留 10% 現金緩衝），可調至 `0.95` |
-| `MAX_SINGLE_WEIGHT` | `0.08` | 單支股票最多 8% 倉位，降至 `0.05` 可更分散 |
-| `FEE_RATE` | `0.001425` | 手續費率（0.1425%），若有打折可調低 |
-| `SLIPPAGE` | `0.001` | 滑價估算（0.1%），流動性差的小型股可調至 `0.002` |
-| `GITHUB_PAGES_URL` | 你的網址 | LINE 通知中的 Dashboard 連結，改成你自己的 GitHub Pages URL |
-
-### 初始虛擬資金設定
-
-首次使用時，修改 `portfolio.json`（從 `portfolio.example.json` 複製）：
-
-```json
-{
-  "cash": 1000000,
-  "comment": "初始現金 100 萬，依個人資金規模調整"
-}
-```
-
----
-
-## 🎯 策略邏輯
-
-### 1. 大盤安全濾網（0050 多空燈）
-
-每日監控大盤趨勢，3 個訊號加權判斷：
-- **60 日均線**（季線）：0050 > MA60 → 長期多頭 × 0.4
-- **20 日均線**：0050 > MA20 → 中期多頭 × 0.3  
-- **無大跌**：0050 月跌幅 < -5% → 無崩盤 × 0.3
-
-≥ 2 訊號同意才進場；任何月份若觸發空頭，強制 100% 出清變現。
-
-### 2. 13 個選股因子
-
-| 類別 | 因子 | 說明 | AI 重要性排名 |
-|------|------|------|:-----------:|
-| 籌碼 | `trust_net_10d` | 投信近 10 日淨買超比例 | 🥇 1 |
-| 技術 | `rsi_14` | 14 日 RSI（動能延續性） | 🥈 2 |
-| 波動 | `atr_rel` | 相對 ATR（波動放大 = 起漲前兆） | 🥉 3 |
-| 動能 | `price_52w` | 股價與 52 週高點距離 | 4 |
-| 動能 | `mom_1m` | 近 1 月報酬率 | 5 |
-| 基本 | `rev_yoy` | 月營收年增率 | 6 |
-| 基本 | `rev_mom` | 月營收月增率 | 7 |
-| 動能 | `mom_1m_ra` | 風險調整後動能 | 8 |
-| 動能 | `mom_3m` | 近 3 月報酬率 | 9 |
-| 動能 | `mom_6m` | 近 6 月報酬率 | 10 |
-| 技術 | `vol_ratio` | 成交量增溫速率 | 11 |
-| 基本 | `rev_accel` | 營收成長加速度 | 12 |
-| 籌碼 | `foreign_net_20d` | 外資近 20 日淨買超比例 | 13 |
-
-> 每次 Walk-Forward retrain 時，LightGBM 在訓練集內透過 **Fold-Internal ICIR 分析**自動選出最穩定的 Top-8 因子進行預測（避免 Lookahead Bias）。
-
-### 3. 資金分配與換倉慣性
-
-- **持股數量**：前 `TOP_K=40` 名（可調整）
-- **等權重**：`WEIGHT_TEMP=5.0` 讓資金趨近平均分配，單支最多 8%
-- **留校察看（Inertia）**：原持股跌至第 80 名以內就繼續留著 → 每年省下約 10% 換倉摩擦成本
-
----
-
-## 📊 回測結果
-
-> 截至 2026-03，回測期間 2019~2026（含 COVID 崩盤 + 2022 升息空頭）
-
-| 指標 | 本策略 | 0050 Benchmark |
-|------|--------|----------------|
-| CAGR | **+9.25%** | +26.59% |
+| 指標 | 策略 (Phase 3 最終版) | 0050 Benchmark |
+|------|------|---------------|
+| CAGR | +9.25% | +26.59% |
 | Total Return | +88.58% | +441.5% |
-| Sharpe Ratio | 0.54 | 1.23 |
-| Max Drawdown | **-28.30%** | -33.83% |
+| Sharpe | 0.54 | 1.23 |
+| Max DD | -28.30% | -33.83% |
 
-> ⚠️ **說明**：本策略以「降低最大回撤」為核心目標。CAGR 落後 0050 但 Max DD 略優於 0050。費用模型已充分還原（手續費 0.1425% + 稅 0.3% + 滑價 0.1%）。過去績效不代表未來結果。
 
----
+**重要說明**：過去版本 CAGR 顯示 +17.22% 是因為手續費低估（`FEE/3` 的計算錯誤）+ Benchmark 未還原分割（顯示 0.29% 假值）+ 因子選擇 Lookahead Bias。Phase 1~3 修正與優化後，採用 `TOP_K=40`、`keep_top_k=80` (Turnover Inertia)、`WEIGHT_TEMP=5.0` (Equal-Weighting) 大幅降低換倉摩擦成本與集中風險，使 Max DD 降至 -28.30%，CAGR 回升至 9.25%。真實反映了扣除高昂手續費與滑價後的實盤預期數字。
 
-## 🚀 雲端全自動化（GitHub Actions）
+## Live Dashboard（自動更新）
 
-### 設定步驟
+https://tw-quant-test.vercel.app/
 
-1. **Fork 或 clone 此 repo 到你的 GitHub 帳號**
+每日盤後（台灣時間 15:30 後約 5～30 分鐘）自動更新
 
-2. **在 GitHub Repo 設定 Secrets**（Settings → Secrets and variables → Actions）：
+## 如何在本地端手動更新策略
 
-   | Secret 名稱 | 說明 |
-   |-------------|------|
-   | `FINMIND_API_TOKEN` | FinMind API Token（必填）|
-   | `LINE_CHANNEL_ACCESS_TOKEN` | LINE Messaging API Token（選填）|
-   | `LINE_USER_ID` | 你的 LINE User ID（選填）|
+```bash
+# 1. 更新資料（約 4 小時）
+source .venv/bin/activate
+python3 data_loaders/01_fetch_finmind_data.py
 
-3. **啟用 GitHub Pages**（Settings → Pages → Source: GitHub Actions）
+# 2. 重新訓練模型（約 5~15 分鐘）
+python3 strategy.py
 
-4. **初始化你的虛擬存摺**：
-   ```bash
-   cp portfolio.example.json portfolio.json
-   # 修改 portfolio.json 中的 cash 為你的初始資金（預設 100 萬）
-   git add portfolio.json && git commit -m "init: my portfolio" && git push
-   ```
-
-5. **上傳模型檔**（將本地回測好的 pkl 推上去）：
-   ```bash
-   git add predictions.pkl weights.pkl eq.pkl bm_eq.pkl
-   git commit -m "feat: upload trained model"
-   git push
-   ```
-
-之後系統每天台灣時間 **15:30** 後自動執行，更新 Dashboard 並（選填）發送 LINE 通知。
-
-### 手動觸發
-
-在 GitHub → Actions → `Daily Quant Update` → `Run workflow` 可隨時手動觸發。
-
----
-
-## 🏗️ 專案結構
-
-```
-tw-quant/
-├── .github/
-│   └── workflows/
-│       └── daily-run.yml          # GitHub Actions 盤後自動化
-├── data_loaders/
-│   ├── 01_fetch_finmind_data.py   # 下載價量、月營收、三大法人資料
-│   ├── 02_fetch_fundamental_data.py  # 下載基本面資料
-│   └── 03_fix_financial.py        # 資料修正工具
-├── reports/
-│   └── generate_report.py         # 生成 14 張 Plotly 回測報告
-├── research/                      # 研究 Notebook（共 10 個）
-│   ├── 01_Data_Pipeline.ipynb
-│   ├── 02_Feature_Engineering.ipynb
-│   └── ...
-├── tests/
-│   ├── test_live_trade.py         # 交易邏輯單元測試
-│   └── test_strategy_utils.py     # 策略工具函數測試
-├── .env.example                   # 環境變數範本（複製為 .env 後填入）
-├── .gitignore
-├── LICENSE
-├── README.md
-├── requirements.txt
-├── strategy.py                    # 核心：ML 選股模型 + 回測
-├── live_trade.py                  # 盤後虛擬交易 + LINE 通知
-└── portfolio.example.json         # 虛擬存摺範本
+# 3. 生成回測報告
+python3 reports/generate_report.py
 ```
 
----
+## 雲端全自動化設計
 
-## 🧪 Unit Tests
+透過 GitHub Actions（UTC 07:30 = 台灣 15:30，週一到週五），每日盤後自動：
+1. 執行 `live_trade.py` 計算損益、更新資料
+2. 生成最新 Dashboard HTML
+3. Push 更新至 GitHub，觸發 GitHub Pages 部署
+4. 發送 LINE 通知（含 Dashboard 連結與當日損益）
+
+## 關鍵設計決策
+
+### 為何使用 Fold-Internal IC 分析（Phase 2）
+原先在全部 2020~2026 資料上計算 ICIR 再選因子，等同讓因子選擇「看到了未來」（Lookahead Bias）。
+修正後，每次 Walk-Forward retrain 時只在該 fold 的訓練資料內計算 ICIR，以真正的 OOS 方式選因子。
+
+### 為何放棄基本面因子
+2022~2024 是 AI 成長股領漲的牛市，價值投資因子反而會讓模型錯失飆漲暴發股。
+目前使用技術面 + 籌碼面 14 個因子，Fold-Internal IC 自動選出最穩定的 Top-8。
+
+### 費用模型
+| 方向 | 手續費 | 交易稅 | 滑價 | 合計 |
+|------|--------|--------|------|------|
+| 買進 | 0.1425% | — | +0.1% | 0.2425% |
+| 賣出 | 0.1425% | 0.3% | -0.1% | 0.5425% |
+| **一圈** | | | | **約 0.79%** |
+
+## 風險控管與持續監控 (Risk Management & Monitoring)
+
+這是一個以「月中長期持有」為核心的量化專案。基於嚴格的數據回測，我們**捨棄了散戶最愛的個股止損，改成「系統性架構防禦」**。身為專案維護者（基金經理人），你需要了解系統如何幫你扛傷害，以及你日常需要注意什麼：
+
+### 系統內建的 三層無形防護網
+1. **防禦黑天鵝 (大盤濾網)**：
+   - **機制**：每日監控 0050 是否跌破 60 日季線。
+   - **效果**：當 COVID 或 2022 升息崩盤發生時，系統會在崩盤初期強制 `clear_position=True`，100% 變現退場。你不必擔心被熊市絞殺。
+2. **防禦非系統風險 (資金極度分散)**：
+   - **機制**：採用 `TOP_K=40` (持有 40 檔) 加上 `WEIGHT_TEMP=5.0` (趨近等權重 Equal-Weight)。
+   - **效果**：單一股票權重被完美壓制在約 2.5%。就算買到地雷股直接下市，對總資金的傷害也僅有 2.5%。我們用「大數法則」對抗個股未知的利空。
+3. **防禦主力的「假洗盤」 (不設停損)**：
+   - **機制**：我們捨棄了 `tsl_stop` (移動停損) 等傳統思維。
+   - **效果**：台股中小型動能股在上漲途中，常有「急跌 10%~15% 把短線客洗下車，再拉漲停」的慣性。因為資金極度分散，我們允許這些「必要的上下劇烈震盪」，確保能完整吃下 +50% 甚至翻倍的核心利潤。
+
+### 日常監控重點
+這套系統透過 `live_trade.py` 搭配 GitHub Actions 每日自動運作，你**不需要**每天盯盤，但建議保持以下日常與每月的健康監控：
+
+1. **每日例行檢查 (Daily Health Check)**：
+   - **LINE 通知**：每天收盤後確認機器人有傳送「台股量化選股系統...」的自動通知，確認 GitHub Actions 有無掛掉。
+   - **保證金/餘額水位**：在下週一或換大倉的前幾天，確認你的實體證券戶內「有足夠的現金交割金」。儀表板 `portfolio.json` 的餘額跟你實體帳戶應該要一致。
+2. **每月檢視 (Monthly Review)**：
+   - **檢視換倉摩擦**：查看儀表板上的換倉清單，觀察 AI 這個月換了幾檔股票。因為我們有 `keep_top_k=80` (留校察看)，多數舊成分股應該會被保留。
+   - **極端數據與 API 額度**：雖然程式內建 FinMind 免費 API (每小時 600 次) 自動睡眠功能，倘若未來 FinMind 政策改變或數據異常 (如營收遲交)，需適時檢查 `.github/workflows` 裡的日誌是否報錯。
+3. **年底維修大保養 (Annual Retrain & Maintenance)**：
+   - **為什麼要做 (Alpha Decay)？**：量化界有一句名言：「所有的因子策略最終都會失效」，因為當一種穩賺的方法被發現，市場就會自動把它抹平。所以每隔 **6 到 12 個月**，你必須讓 AI 重新學習最新的市場數據，淘汰掉失效的因子。
+   - **保養 SOP（具體怎麼做）**：
+     不用寫新程式！只要在你本地端電腦（非 GitHub）打開終端機，依法泡製：
+     1. **重新下載最新長期歷史資料** (需跑幾小時)：
+        ```bash
+        source .venv/bin/activate
+        python3 data_loaders/01_fetch_finmind_data.py
+        ```
+     2. **讓 AI 重新學習與回測** (約 10 分鐘)：
+        ```bash
+        python3 strategy.py
+        ```
+     3. **推送到雲端正式上線**：
+        將剛剛重新算好的模型預測檔與歷史資料更新到 GitHub，明天機器人就會自動用新腦袋下單：
+        ```bash
+        git add *.pkl
+        git commit -m "chore: annual model retrain"
+        git push origin main
+        ```
+     *(進階：如果有閒情逸致，可以依序打開 `Research/01`~`04` 號 Jupyter Notebooks 跑一次，你可以親自看見圖表上 AI 又發現了什麼新的台股財富密碼！)*
+
+## Unit Tests
+
+測試涵蓋核心交易邏輯，不需要 API Token，全部使用 mock data
 
 ```bash
 source .venv/bin/activate
-python -m pytest tests/ -v
+python3 -m pytest tests/ -v
 ```
 
-預期：25 passed（不需要 API Token，全部使用 mock data）
+預期結果：25 passed
 
 | 測試檔案 | 涵蓋項目 |
 |---------|---------|
-| `test_live_trade.py` | 手續費、交易稅、滑價、Weight Cap、NAV 計算 |
-| `test_strategy_utils.py` | Softmax 權重、Z-score、Winsorize、Inertia 收斂 |
+| `tests/test_live_trade.py` | 買入手續費、賣出稅費、滑價方向、Weight Cap 8% 上限、現金保留 ≥10%、NAV 計算 |
+| `tests/test_strategy_utils.py` | Softmax 權重加總=1、高/低溫度行為、Z-score 截面正規化、Winsorize ±3σ、迭代 Weight Cap 收斂 |
 
----
+## force_rebalance 手動換倉
 
-## 🔬 Research Notebooks（探索用）
+在 `portfolio.json` 加一行，下一次 Actions 執行時就會強制換倉（執行後自動清除）：
 
-`research/` 目錄下 10 個 Jupyter Notebook，依序執行可完整理解每個設計決策的實驗過程：
+```json
+{
+  "force_rebalance": true,
+  ...
+}
+```
+
+適用於：更換模型、調整參數、重大市場事件後希望立即更新倉位。
+
+## Research Notebooks（探索與優化用）
+
+`Research/` 目錄下依序執行，共享記憶體變數：
 
 | Notebook | 用途 |
 |----------|------|
 | `01_Data_Pipeline.ipynb` | 資料載入 + 流動性快速檢查 |
-| `02_Feature_Engineering.ipynb` | 13 因子計算 + IC 分析 |
-| `03_Model_Training.ipynb` | Walk-Forward + LightGBM |
-| `04_Backtester.ipynb` | vectorbt 回測 + 月度熱力圖 |
-| `05_Factor_Stability.ipynb` | 因子穩定度 ICIR 熱力圖 |
-| `06_Portfolio_Size_Sweep.ipynb` | 持股數量掃描（TOP_K 最佳化）|
-| `07_Temperature_Sweep.ipynb` | Softmax 溫度掃描（等權 vs. 集中）|
-| `08_Turnover_Cost_Analysis.ipynb` | 換倉率 vs. 摩擦成本 |
-| `09_Trailing_Stop_Loss_Analysis.ipynb` | 移動停損測試（實證：台股不適用）|
-| `10_Fundamental_Alpha_Ensemble.ipynb` | 基本面濾網測試（PE/PB 會錯殺飆股）|
-
----
-
-## ⚙️ 年度維修 SOP（Alpha Decay 防止策略失效）
-
-建議每 6~12 個月重新訓練一次以對抗因子衰退：
-
-```bash
-source .venv/bin/activate
-
-# 1. 更新資料（約 4~6 小時）
-python data_loaders/01_fetch_finmind_data.py
-
-# 2. 重新訓練（約 10~20 分鐘）
-python strategy.py
-
-# 3. 推送新模型上線
-git add *.pkl
-git commit -m "chore: annual model retrain $(date +%Y-%m)"
-git push
-```
+| `02_Feature_Engineering.ipynb` | 14 因子計算 + IC 分析 + Top-8 ICIR 篩選 |
+| `03_Model_Training.ipynb` | Walk-Forward + LightGBM + Regime Filter |
+| `04_Backtester.ipynb` | vectorbt 回測 + 月度報酬熱力圖 |
+| `05_Factor_Stability.ipynb` | 因子穩定度測試 (找出投信作帳、RSI、波動放大等台股實質有用指標) |
+| `06_Portfolio_Size_Sweep.ipynb` | 持股數量掃描 (測試 TOP_K 集中度對 Sharpe 與 Max DD 的影響) |
+| `07_Temperature_Sweep.ipynb` | 資金分配權重掃描 (驗證平權 Equal Weight vs. Confidence Weight 的差異) |
+| `08_Turnover_Cost_Analysis.ipynb` | 換倉率與摩擦成本分析 (建立 Inertia 留校察看機制把摩擦成本從 40% 壓下來) |
+| `09_Trailing_Stop_Loss_Analysis.ipynb` | 移動停損測試 (發現台股強勢股洗盤不適合個股停損) |
+| `10_Fundamental_Alpha_Ensemble.ipynb` | 基本面價值濾網測試 (實證：PE、PB 濾網會錯殺強勢動能股，應避免使用) |
 
 ---
 
@@ -335,3 +255,4 @@ git push
 ## 📄 License
 
 本專案採用 [MIT License](LICENSE) 授權。你可以自由使用、修改與分發，但請保留原始授權聲明。
+

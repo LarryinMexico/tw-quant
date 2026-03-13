@@ -33,7 +33,7 @@ SLIPPAGE          = 0.001      # 0.1% 滑價（雙向）
 MAX_INVEST_RATIO  = 0.90       # 最多投入 90% 資金（保留 10% 現金緩衝）
 MAX_SINGLE_WEIGHT = 0.08       # 單支股票最多 8%
 # GitHub Pages
-GITHUB_PAGES_URL = "https://larryinmexico.github.io/tw_quant_test/"
+GITHUB_PAGES_URL = "https://tw-quant-test.vercel.app/"
 
 LINE_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
 LINE_USER  = os.getenv("LINE_USER_ID")
