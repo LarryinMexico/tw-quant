@@ -1,14 +1,13 @@
-# 台股 ML 量化選股系統
 
-基於 Python 與 Machine Learning 的台股量化選股與自動回測紙上交易系統。
-採用 FinMind 作為免費每日資料來源，以 vectorbt 進行精確回測，LightGBM 進行選股預測。
+資料來源：FinMind、yfinance
+回測：vectorbt
+ML：LightGBM
 
 ##  策略
 
 ### 1.  大盤安全濾網 (0050 紅綠燈)
- AI 不管多會選股，遇到股災（像 COVID 或 2022 狂跌）也是會死。
-所以它每天都會看一眼代表大盤的 `0050 (台灣 50)`。如果 0050 的股價**跌破季線 (60日均線)**，AI 就會認定市場進入「空頭暴風雨」。
-- **應對：強迫出清所有股票，100% 抱著現金避險。**
+0050跌破60日均線 -> 強迫清倉
+
 
 ### 2. 13 個實戰選股因子：動能與籌碼
 如果大盤安全，把台股所有的 1,800 間公司拉出來打分數。機器學習投入的 13 個具體量化因子如下：
@@ -59,7 +58,7 @@ AI (LightGBM模型) 透過學習過去 48 個月的歷史，會預測出這 1800
 - **買 40 支股票 (分散風險)**：它會挑出排行榜的前 40 名，並且平均把錢切成 40 份去買，避免其中一家公司突然倒閉。
 - **不要太常換股 (Inertia, 省手續費)**：如果一檔股票原本在名單內，下個月它稍微退步掉到了第 50 名，AI **「依然會留著它不賣」**（留校察看 80 名內都安全）。只有當它退步到 80 名以外徹底沒救了，AI 才會付手續費把它賣掉。這每年幫你省下了將近 10% 的瘋狂換倉成本！
 
-### 4.  紙上虛擬收銀機 (Live Trade)
+### 4.  Live Trade
 系統有一份 `portfolio.json`，就像你的證券 APP 存摺：
 - 它會記錄你「每天的帳戶總餘額」。
 - 每次月底買賣，它會**扣掉 0.1425%手續費、0.3%交易稅，以及怕買不到扣的滑差**。
@@ -73,7 +72,7 @@ AI (LightGBM模型) 透過學習過去 48 個月的歷史，會預測出這 1800
 - `data_loaders/02_fetch_fundamental_data.py` 抓取財報比率（PE/PB/殖利率）
 
 ### 2 回測與策略層
-- `strategy.py` 終極 ML 選股模型
+- `strategy.py`  ML 選股模型
   - Walk-Forward Purged CV（48個月訓練視窗，Purge 1個月）
   - Fold-Internal IC 分析（在每個 fold 的訓練資料內動態選出 Top-8 ICIR 因子）
   - Multi-signal Regime Filter（0050 均線濾網，只在多頭進場）
@@ -82,7 +81,7 @@ AI (LightGBM模型) 透過學習過去 48 個月的歷史，會預測出這 1800
 - `reports/generate_report.py` 生成 14 張圖表的 Plotly Dashboard
 
 ### 3 實盤紙上交易
-- `live_trade.py` 每日盤後（台灣時間約 15:30）自動：
+- `live_trade.py` 每日盤後（台灣時間約 13:40）自動：
   - 從 yfinance + FinMind 抓取最新收盤價，計算未實現損益
   - 月底自動換倉，計算並記錄真實**實現損益**（基於 cost_basis 成本基礎）
   - 推播 LINE 通知 + 更新 GitHub Pages Dashboard
@@ -102,13 +101,13 @@ AI (LightGBM模型) 透過學習過去 48 個月的歷史，會預測出這 1800
 
 **重要說明**：過去版本 CAGR 顯示 +17.22% 是因為手續費低估（`FEE/3` 的計算錯誤）+ Benchmark 未還原分割（顯示 0.29% 假值）+ 因子選擇 Lookahead Bias。Phase 1~3 修正與優化後，採用 `TOP_K=40`、`keep_top_k=80` (Turnover Inertia)、`WEIGHT_TEMP=5.0` (Equal-Weighting) 大幅降低換倉摩擦成本與集中風險，使 Max DD 降至 -28.30%，CAGR 回升至 9.25%。真實反映了扣除高昂手續費與滑價後的實盤預期數字。
 
-## Live Dashboard（自動更新）
+## 自動更新
 
 https://tw-quant-test.vercel.app/
 
-每日盤後（台灣時間 15:30 後約 5～30 分鐘）自動更新
+每日盤後（台灣時間 13:40 後約 5～30 分鐘）自動更新
 
-## 如何在本地端手動更新策略
+## 在本地端手動更新
 
 ```bash
 # 1. 更新資料（約 4 小時）
@@ -124,10 +123,10 @@ python3 reports/generate_report.py
 
 ## 雲端全自動化設計
 
-透過 GitHub Actions（UTC 07:30 = 台灣 15:30，週一到週五），每日盤後自動：
+透過 GitHub Actions（UTC 05:40 = 台灣 13:40，週一到週五），每日盤後自動：
 1. 執行 `live_trade.py` 計算損益、更新資料
 2. 生成最新 Dashboard HTML
-3. Push 更新至 GitHub，觸發 GitHub Pages 部署
+3. Push 更新至 GitHub，觸發 Vercel 部署
 4. 發送 LINE 通知（含 Dashboard 連結與當日損益）
 
 ## 關鍵設計決策
