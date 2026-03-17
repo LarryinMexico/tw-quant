@@ -1,10 +1,8 @@
 name: Daily Quant Update
 
-# 每日台灣時間 15:30 後執行（UTC 07:30，週一到週五）
-# 可在 GitHub Actions 頁面手動觸發
 on:
-#  schedule:
-#    - cron: '30 7 * * 1-5'
+  schedule:
+    - cron: '0 6 * * 1-5'
   workflow_dispatch:
 
 jobs:
@@ -30,29 +28,16 @@ jobs:
 
       - name: Update Portfolio and Send LINE Notification
         env:
-          FINMIND_API_TOKEN: ${{ secrets.FINMIND_API_TOKEN }}
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
           LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
         run: |
-          python live_trade.py
-          python reports/generate_live_dashboard.py
+          python3 live_trade.py
+          python3 reports/generate_live_dashboard.py
 
       - name: Commit and Push Updates
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add portfolio.json frontend/index.html
-          git commit -m "chore: auto-update portfolio $(date +%Y-%m-%d)" || echo "No changes to commit"
+          git commit -m "chore auto-update portfolio and data" || echo "No changes to commit"
           git push
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v3
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: './frontend'
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
