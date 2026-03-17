@@ -16,13 +16,13 @@ graph TD
     B -->|OHLCV, 營收, 法人籌碼| C{特徵工程 Feature Engineering}
     C -->|橫截面正規化 13 項因子| D[LightGBM 決策樹模型]
     
-    subgraph 核心訓練與驗證 (Model Pipeline)
+    subgraph Model_Pipeline [核心訓練與驗證 Model Pipeline]
         D -->|Walk-Forward Purged CV| E[Fold-Internal ICIR 分析]
         E -->|動態特徵選擇| F[Top-8 穩定因子]
         F -->|預測與權重產出| G[Weights & Predictions]
     end
     
-    subgraph 實盤模擬交易引擎 (Live Trading Engine)
+    subgraph Live_Trading_Engine [實盤模擬交易引擎 Live Trading Engine]
         G --> H[live_trade.py]
         H -->|目標權重分配| I[投資組合管理 Portfolio Manager]
         I -->|市場多空濾網 Regime Filter| J{資金執行邏輯}
