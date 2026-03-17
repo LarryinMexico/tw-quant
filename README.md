@@ -8,6 +8,7 @@
 
 本專案為針對台灣股票市場開發的端到端機器學習量化交易系統。系統整合了資料傳輸、特徵工程、Walk-Forward 滾動交叉驗證、基於 LightGBM 的動態因子選擇模型，以及全自動化的盤後紙上交易 (Paper Trading) 與報表渲染模組。
 
+![Dashboard Preview](assets/dashboard_preview.png)
 
 ## 核心技術特性 (Key Features)
 
