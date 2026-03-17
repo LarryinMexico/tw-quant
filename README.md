@@ -8,34 +8,6 @@
 
 本專案為針對台灣股票市場開發的端到端機器學習量化交易系統。系統整合了資料傳輸、特徵工程、Walk-Forward 滾動交叉驗證、基於 LightGBM 的動態因子選擇模型，以及全自動化的盤後紙上交易 (Paper Trading) 與報表渲染模組。
 
-## 系統架構 (System Architecture)
-
-```mermaid
-graph TD
-    A[FinMind API 外部資料源] -->|每日資料拉取| B(Data Loaders 模組)
-    B -->|OHLCV, 營收, 法人籌碼| C{特徵工程 Feature Engineering}
-    C -->|橫截面正規化 13 項因子| D[LightGBM 決策樹模型]
-    
-    subgraph Model_Pipeline [核心訓練與驗證 Model Pipeline]
-        D -->|Walk-Forward Purged CV| E[Fold-Internal ICIR 分析]
-        E -->|動態特徵選擇| F[Top-8 穩定因子]
-        F -->|預測與權重產出| G[Weights & Predictions]
-    end
-    
-    subgraph Live_Trading_Engine [實盤模擬交易引擎 Live Trading Engine]
-        G --> H[live_trade.py]
-        H -->|目標權重分配| I[投資組合管理 Portfolio Manager]
-        I -->|市場多空濾網 Regime Filter| J{資金執行邏輯}
-        J -->|更新帳戶狀態| K[portfolio.json]
-    end
-    
-    K --> L[Plotly 視覺化儀表板生成]
-    L --> M[GitHub Pages 自動部署]
-    K --> N[LINE Messaging API 推播]
-    
-    O((GitHub Actions CI/CD)) -.->|排程 15:30 UTC+8| A
-    O -.->|無伺服器自動化| H
-```
 
 ## 核心技術特性 (Key Features)
 
