@@ -124,6 +124,9 @@ python3 reports/generate_report.py
 
 ## 雲端全自動化設計
 
+> **⚠️ 注意事項：公開版本預設關閉自動排程**
+> 為了避免展示版本不必要的資源消耗，目前 GitHub Actions 中的每日自動化排程 (cron) 已被註解關閉。如果您 Fork 了此專案並希望每天自動抓取並更新資料，請至 `.github/workflows/daily-run.yml` 中，將 `schedule` 區塊的註解解開即可恢復每日自動運行。
+
 透過 GitHub Actions（UTC 06:00 = 台灣 14:00，週一到週五），每日盤後自動：
 1. 執行 `live_trade.py` 計算損益、更新資料
 2. 生成最新 Dashboard HTML
